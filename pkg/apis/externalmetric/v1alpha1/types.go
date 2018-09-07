@@ -32,7 +32,7 @@ type ExternalMetricSpec struct {
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
 // ExternalMetricsList is a list of ExternalMetric resources
-type ExternalMetricsList struct {
+type ExternalMetricList struct {
 	meta_v1.TypeMeta `json:",inline"`
 	meta_v1.ListMeta `json:"metadata"`
 
