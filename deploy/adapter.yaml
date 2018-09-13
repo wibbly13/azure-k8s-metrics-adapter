@@ -21,6 +21,60 @@ metadata:
     heritage: Tiller
 
 ---
+# Source: azure-k8s-metrics-adapter/templates/apis.yaml
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: external-metrics-reader
+rules:
+- apiGroups:
+  - "external.metrics.k8s.io"
+  resources:
+  - "*"
+  verbs:
+  - list
+  - get
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: external-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-metrics-reader
+subjects:
+- kind: ServiceAccount
+  name: horizontal-pod-autoscaler
+  namespace: kube-system
+---
+# CRD Registrations
+---
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  # name must match the spec fields below, and be in the form: <plural>.<group>
+  name: externalmetrics.azure.com
+spec:
+  # group name to use for REST API: /apis/<group>/<version>
+  group: azure.com
+  versions:
+    - name: v1alphav1
+      served: true
+      storage: true
+  scope: Namespaced
+  names:
+    # plural name to be used in the URL: /apis/<group>/<version>/<plural>
+    plural: externalmetrics
+    singular: externalmetric
+    kind: ExternalMetric
+    shortNames:
+    - em
+  #validation: #Turn on validation in future
+
+---
 # Source: azure-k8s-metrics-adapter/templates/cluster-role.yaml
 
 apiVersion: rbac.authorization.k8s.io/v1
@@ -280,55 +334,3 @@ spec:
 ---
 # Source: azure-k8s-metrics-adapter/templates/secret.yaml
 
-# give HPA access to external metrics
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: external-metrics-reader
-rules:
-- apiGroups:
-  - "external.metrics.k8s.io"
-  resources:
-  - "*"
-  verbs:
-  - list
-  - get
-  - watch
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: external-metrics-reader
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: external-metrics-reader
-subjects:
-- kind: ServiceAccount
-  name: horizontal-pod-autoscaler
-  namespace: kube-system
----
-# CRD Registrations
----
-apiVersion: apiextensions.k8s.io/v1beta1
-kind: CustomResourceDefinition
-metadata:
-  # name must match the spec fields below, and be in the form: <plural>.<group>
-  name: externalmetrics.azure.com
-spec:
-  # group name to use for REST API: /apis/<group>/<version>
-  group: azure.com
-  versions:
-    - name: v1alphav1
-      served: true
-      storage: true
-  scope: Namespaced
-  names:
-    # plural name to be used in the URL: /apis/<group>/<version>/<plural>
-    plural: externalmetrics
-    singular: externalmetric
-    kind: ExternalMetric
-    shortNames:
-    - em
-  #validation: #Turn on validation in future
