@@ -9,4 +9,9 @@ deploy:
     - name: azure-k8s-metrics-adapter-dev
       chartPath: charts/azure-k8s-metrics-adapter
       values:
-        image.repository: azure-k8s-metrics-adapter-dev
+        image: azure-k8s-metrics-adapter-dev 
+      imageStrategy:
+        helm: {}
+      overrides:
+        image:
+          pullPolicy: IfNotPresent
