@@ -33,6 +33,9 @@ func NewController(externalMetricInformer informers.ExternalMetricInformer) *Con
 	externalMetricInformer.Informer().AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: controller.enqueueExternalMetric,
 		UpdateFunc: func(old, new interface{}) {
+			// Watches and Informers will “sync”.
+			// Periodically, they will deliver every matching object in the cluster to your Update method.
+			// https://github.com/kubernetes/community/blob/8cafef897a22026d42f5e5bb3f104febe7e29830/contributors/devel/controllers.md
 			controller.enqueueExternalMetric(new)
 		},
 		DeleteFunc: controller.enqueueExternalMetric,
@@ -132,5 +135,7 @@ func (c *Controller) enqueueExternalMetric(obj interface{}) {
 		runtime.HandleError(err)
 		return
 	}
+
+	glog.V(2).Infof("adding item to queue for '%s'", key)
 	c.externalMetricqueue.AddRateLimited(key)
 }
