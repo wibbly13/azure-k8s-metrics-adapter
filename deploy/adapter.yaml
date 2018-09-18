@@ -96,6 +96,25 @@ rules:
   - list
   - get
   - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: azure-k8s-metrics-adapter:crd-metrics-reader
+  labels:
+    app: azure-k8s-metrics-adapter
+    chart: azure-k8s-metrics-adapter-0.1.0
+    release: azure-k8s-metrics-adapter
+    heritage: Tiller
+rules:
+- apiGroups:
+  - azure.com
+  resources:
+  - "externalmetrics"
+  verbs:
+  - list
+  - get
+  - watch
 
 ---
 # Source: azure-k8s-metrics-adapter/templates/cluster-role-binding.yaml
@@ -119,7 +138,7 @@ subjects:
     namespace: "custom-metrics"
     kind: ServiceAccount
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: azure-k8s-metrics-adapter
@@ -137,7 +156,7 @@ subjects:
     namespace: "custom-metrics"
     kind: ServiceAccount
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: azure-k8s-metrics-adapter:hpa-external-metrics-reader
@@ -155,7 +174,7 @@ subjects:
     name: horizontal-pod-autoscaler
     namespace: kube-system
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: azure-k8s-metrics-adapter:hpa-custom-metrics-reader
@@ -172,6 +191,25 @@ subjects:
   - kind: ServiceAccount
     name: horizontal-pod-autoscaler
     namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: azure-k8s-metrics-adapter:crd-metrics-reader
+  labels:
+    app: azure-k8s-metrics-adapter
+    chart: azure-k8s-metrics-adapter-0.1.0
+    release: azure-k8s-metrics-adapter
+    heritage: Tiller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: azure-k8s-metrics-adapter:crd-metrics-reader
+subjects:
+  - name: azure-k8s-metrics-adapter
+    namespace: "custom-metrics"
+    kind: ServiceAccount
+---
 
 ---
 # Source: azure-k8s-metrics-adapter/templates/role-binding.yaml
