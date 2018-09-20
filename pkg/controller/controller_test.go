@@ -7,7 +7,6 @@ import (
 	api "github.com/Azure/azure-k8s-metrics-adapter/pkg/apis/externalmetric/v1alpha1"
 	"github.com/Azure/azure-k8s-metrics-adapter/pkg/client/clientset/versioned/fake"
 	informers "github.com/Azure/azure-k8s-metrics-adapter/pkg/client/informers/externalversions"
-	"github.com/golang/glog"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,11 +18,12 @@ type controllerConfig struct {
 	// store is the fake etcd backing store that the go client will
 	// use to push to the controller.  Add anything the controller to
 	// process to the store
-	store          []runtime.Object
-	syncedFunction cache.InformerSynced
-	enqueuer       func(c *Controller) func(obj interface{})
-	handler        ContollerHandler
-	runtimes       int
+	store                      []runtime.Object
+	externalMetricsListerCache []*api.ExternalMetric
+	syncedFunction             cache.InformerSynced
+	enqueuer                   func(c *Controller) func(obj interface{})
+	handler                    ContollerHandler
+	runtimes                   int
 }
 
 type wanted struct {
@@ -46,6 +46,14 @@ func testStore() []runtime.Object {
 	externalMetric := newExternalMetric()
 	storeObjects = append(storeObjects, externalMetric)
 	return storeObjects
+}
+
+func testListerCache() []*api.ExternalMetric {
+	var externalMetricsListerCache []*api.ExternalMetric
+
+	externalMetric := newExternalMetric()
+	externalMetricsListerCache = append(externalMetricsListerCache, externalMetric)
+	return externalMetricsListerCache
 }
 
 func TestProcessRunsToCompletion(t *testing.T) {
@@ -109,9 +117,9 @@ func TestInvalidItemOnQueue(t *testing.T) {
 	// to exersize the invalid queue path
 	var badenquer = func(c *Controller) func(obj interface{}) {
 		enquer := func(obj interface{}) {
-			var key string
 
-			glog.V(2).Infof("adding item to queue for '%s'", key)
+			// this pushes the object on instead of the key which
+			// will cause an error
 			c.externalMetricqueue.AddRateLimited(obj)
 		}
 
@@ -120,11 +128,12 @@ func TestInvalidItemOnQueue(t *testing.T) {
 
 	testConfig := testConfig{
 		controllerConfig: controllerConfig{
-			store:          testStore(),
-			syncedFunction: alwaysSynced,
-			enqueuer:       badenquer,
-			handler:        succesFakeHandler{},
-			runtimes:       1,
+			store:                      testStore(),
+			syncedFunction:             alwaysSynced,
+			enqueuer:                   badenquer,
+			handler:                    succesFakeHandler{},
+			runtimes:                   1,
+			externalMetricsListerCache: testListerCache(),
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -185,6 +194,11 @@ func newController(config controllerConfig) (*Controller, informers.SharedInform
 
 	// override so the item gets added right away for testing with no delay
 	c.externalMetricqueue = workqueue.NewNamedRateLimitingQueue(NoDelyRateLimiter(), "nodelay")
+
+	for _, em := range config.externalMetricsListerCache {
+		// this will force the enqueuer to reload
+		i.Azure().V1alpha1().ExternalMetrics().Informer().GetIndexer().Add(em)
+	}
 
 	return c, i
 }
