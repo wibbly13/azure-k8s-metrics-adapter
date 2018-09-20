@@ -23,6 +23,7 @@ type controllerConfig struct {
 	syncedFunction cache.InformerSynced
 	enqueuer       func(c *Controller) func(obj interface{})
 	handler        ContollerHandler
+	runtimes       int
 }
 
 type wanted struct {
@@ -54,6 +55,7 @@ func TestProcessRunsToCompletion(t *testing.T) {
 			store:          testStore(),
 			syncedFunction: alwaysSynced,
 			handler:        succesFakeHandler{},
+			runtimes:       1,
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -71,11 +73,31 @@ func TestFailedProcessorReEnqueues(t *testing.T) {
 			store:          testStore(),
 			syncedFunction: alwaysSynced,
 			handler:        failedFakeHandler{},
+			runtimes:       1,
 		},
 		want: wanted{
 			itemsRemaing: 1,
 			keepRunning:  true,
 			enqueCount:   2, // should be two because it got added two second time on failure
+		},
+	}
+
+	runControllerTests(testConfig, t)
+}
+
+func TestRetryThenRemoveAfter5Attempts(t *testing.T) {
+
+	testConfig := testConfig{
+		controllerConfig: controllerConfig{
+			store:          testStore(),
+			syncedFunction: alwaysSynced,
+			handler:        failedFakeHandler{},
+			runtimes:       5,
+		},
+		want: wanted{
+			itemsRemaing: 0,
+			keepRunning:  true,
+			enqueCount:   0, // will be zero after it gets removed
 		},
 	}
 
@@ -102,6 +124,7 @@ func TestInvalidItemOnQueue(t *testing.T) {
 			syncedFunction: alwaysSynced,
 			enqueuer:       badenquer,
 			handler:        succesFakeHandler{},
+			runtimes:       1,
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -119,7 +142,16 @@ func runControllerTests(testConfig testConfig, t *testing.T) {
 	defer close(stopCh)
 	i.Start(stopCh)
 
-	keepRunning := c.processNextItem()
+	actaulRunTimes := 0
+	keepRunning := false
+	for actaulRunTimes < testConfig.controllerConfig.runtimes {
+		keepRunning = c.processNextItem()
+		actaulRunTimes++
+	}
+
+	if actaulRunTimes != testConfig.controllerConfig.runtimes {
+		t.Errorf("actual runtime should equal configured runtime = %v, want %v", actaulRunTimes, testConfig.controllerConfig.runtimes)
+	}
 
 	if keepRunning != testConfig.want.keepRunning {
 		t.Errorf("should continue processing = %v, want %v", keepRunning, testConfig.want.keepRunning)
