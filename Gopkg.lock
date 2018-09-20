@@ -323,14 +323,6 @@
   revision = "1f1cda41a301080789507a291b999807002ede46"
 
 [[projects]]
-  digest = "1:de5cf8ce6868c9b31b1121047147d40b6361ddcf9031d4674de454d30c9e0fab"
-  name = "github.com/kubernetes/kubernetes"
-  packages = ["staging/src/k8s.io/sample-controller/pkg/signals"]
-  pruneopts = "UT"
-  revision = "a4529464e4629c21224b3d52edfe0ea91b072862"
-  version = "v1.11.3"
-
-[[projects]]
   branch = "master"
   digest = "1:89cb38858ea53690cdcd952f35b6cdda405dc9f8fc5601872e01b49c88c59991"
   name = "github.com/mailru/easyjson"
@@ -954,7 +946,6 @@
     "github.com/golang/glog",
     "github.com/kubernetes-incubator/custom-metrics-apiserver/pkg/cmd",
     "github.com/kubernetes-incubator/custom-metrics-apiserver/pkg/provider",
-    "github.com/kubernetes/kubernetes/staging/src/k8s.io/sample-controller/pkg/signals",
     "k8s.io/apimachinery/pkg/api/errors",
     "k8s.io/apimachinery/pkg/api/meta",
     "k8s.io/apimachinery/pkg/api/resource",
