@@ -14,10 +14,12 @@ import (
 )
 
 type controllerConfig struct {
-	store                      []runtime.Object
-	syncedFunction             cache.InformerSynced
-	externalMetricsListerCache []*api.ExternalMetric
-	enqueuer                   func(c *Controller) func(obj interface{})
+	// store is the fake etcd backing store that the go client will
+	// use to push to the controller.  Add anything the controller to
+	// process to the store
+	store          []runtime.Object
+	syncedFunction cache.InformerSynced
+	enqueuer       func(c *Controller) func(obj interface{})
 }
 
 type wanted struct {
@@ -31,18 +33,15 @@ type testConfig struct {
 }
 
 func TestProcessRunsToCompletion(t *testing.T) {
-	var externalMetricsCache []*api.ExternalMetric
 	var storeObjects []runtime.Object
 
 	externalMetric := newExternalMetric("test")
 	storeObjects = append(storeObjects, externalMetric)
-	externalMetricsCache = append(externalMetricsCache, externalMetric)
 
 	testConfig := testConfig{
 		controllerConfig: controllerConfig{
-			store:                      storeObjects,
-			externalMetricsListerCache: externalMetricsCache,
-			syncedFunction:             alwaysSynced,
+			store:          storeObjects,
+			syncedFunction: alwaysSynced,
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -50,16 +49,14 @@ func TestProcessRunsToCompletion(t *testing.T) {
 		},
 	}
 
-	runController(testConfig, t)
+	runControllerTests(testConfig, t)
 }
 
 func TestInvalidItemOnQueue(t *testing.T) {
-	var externalMetricsCache []*api.ExternalMetric
 	var storeObjects []runtime.Object
 
 	externalMetric := newExternalMetric("test")
 	storeObjects = append(storeObjects, externalMetric)
-	externalMetricsCache = append(externalMetricsCache, externalMetric)
 
 	// force the queue to have anything other than a string
 	// to exersize the invalid queue path
@@ -76,10 +73,9 @@ func TestInvalidItemOnQueue(t *testing.T) {
 
 	testConfig := testConfig{
 		controllerConfig: controllerConfig{
-			store:                      storeObjects,
-			externalMetricsListerCache: externalMetricsCache,
-			syncedFunction:             alwaysSynced,
-			enqueuer:                   badenquer,
+			store:          storeObjects,
+			syncedFunction: alwaysSynced,
+			enqueuer:       badenquer,
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -87,10 +83,10 @@ func TestInvalidItemOnQueue(t *testing.T) {
 		},
 	}
 
-	runController(testConfig, t)
+	runControllerTests(testConfig, t)
 }
 
-func runController(testConfig testConfig, t *testing.T) {
+func runControllerTests(testConfig testConfig, t *testing.T) {
 	c, i := newController(testConfig.controllerConfig)
 
 	stopCh := make(chan struct{})
@@ -119,10 +115,6 @@ func newController(config controllerConfig) (*Controller, informers.SharedInform
 
 	if config.enqueuer != nil {
 		c.enqueuer = config.enqueuer(c)
-	}
-
-	for _, d := range config.externalMetricsListerCache {
-		i.Azure().V1alpha1().ExternalMetrics().Informer().GetIndexer().Add(d)
 	}
 
 	return c, i
