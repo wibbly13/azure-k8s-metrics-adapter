@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"testing"
 
 	api "github.com/Azure/azure-k8s-metrics-adapter/pkg/apis/externalmetric/v1alpha1"
@@ -11,6 +12,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/util/workqueue"
 )
 
 type controllerConfig struct {
@@ -20,11 +22,16 @@ type controllerConfig struct {
 	store          []runtime.Object
 	syncedFunction cache.InformerSynced
 	enqueuer       func(c *Controller) func(obj interface{})
+	handler        ContollerHandler
 }
 
 type wanted struct {
 	keepRunning  bool
 	itemsRemaing int
+
+	// number of times added two queue
+	// will be zero if the item was forgeten
+	enqueCount int
 }
 
 type testConfig struct {
@@ -32,16 +39,21 @@ type testConfig struct {
 	want             wanted
 }
 
-func TestProcessRunsToCompletion(t *testing.T) {
+func testStore() []runtime.Object {
 	var storeObjects []runtime.Object
 
-	externalMetric := newExternalMetric("test")
+	externalMetric := newExternalMetric()
 	storeObjects = append(storeObjects, externalMetric)
+	return storeObjects
+}
+
+func TestProcessRunsToCompletion(t *testing.T) {
 
 	testConfig := testConfig{
 		controllerConfig: controllerConfig{
-			store:          storeObjects,
+			store:          testStore(),
 			syncedFunction: alwaysSynced,
+			handler:        succesFakeHandler{},
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -52,12 +64,25 @@ func TestProcessRunsToCompletion(t *testing.T) {
 	runControllerTests(testConfig, t)
 }
 
+func TestFailedProcessorReEnqueues(t *testing.T) {
+
+	testConfig := testConfig{
+		controllerConfig: controllerConfig{
+			store:          testStore(),
+			syncedFunction: alwaysSynced,
+			handler:        failedFakeHandler{},
+		},
+		want: wanted{
+			itemsRemaing: 1,
+			keepRunning:  true,
+			enqueCount:   2, // should be two because it got added two second time on failure
+		},
+	}
+
+	runControllerTests(testConfig, t)
+}
+
 func TestInvalidItemOnQueue(t *testing.T) {
-	var storeObjects []runtime.Object
-
-	externalMetric := newExternalMetric("test")
-	storeObjects = append(storeObjects, externalMetric)
-
 	// force the queue to have anything other than a string
 	// to exersize the invalid queue path
 	var badenquer = func(c *Controller) func(obj interface{}) {
@@ -73,9 +98,10 @@ func TestInvalidItemOnQueue(t *testing.T) {
 
 	testConfig := testConfig{
 		controllerConfig: controllerConfig{
-			store:          storeObjects,
+			store:          testStore(),
 			syncedFunction: alwaysSynced,
 			enqueuer:       badenquer,
+			handler:        succesFakeHandler{},
 		},
 		want: wanted{
 			itemsRemaing: 0,
@@ -96,13 +122,18 @@ func runControllerTests(testConfig testConfig, t *testing.T) {
 	keepRunning := c.processNextItem()
 
 	if keepRunning != testConfig.want.keepRunning {
-		t.Errorf("c.processNextItem() = %v, want %v", keepRunning, testConfig.want.keepRunning)
+		t.Errorf("should continue processing = %v, want %v", keepRunning, testConfig.want.keepRunning)
 	}
 
 	items := c.externalMetricqueue.Len()
 
 	if items != testConfig.want.itemsRemaing {
-		t.Errorf("c.processNextItem() = %v, want %v", keepRunning, testConfig.want.itemsRemaing)
+		t.Errorf("Items still on queue = %v, want %v", items, testConfig.want.itemsRemaing)
+	}
+
+	retrys := c.externalMetricqueue.NumRequeues("default/test")
+	if retrys != testConfig.want.enqueCount {
+		t.Errorf("Items enqueued times = %v, want %v", retrys, testConfig.want.enqueCount)
 	}
 }
 
@@ -110,21 +141,27 @@ func newController(config controllerConfig) (*Controller, informers.SharedInform
 	fakeClient := fake.NewSimpleClientset(config.store...)
 	i := informers.NewSharedInformerFactory(fakeClient, 0)
 
-	c := NewController(i.Azure().V1alpha1().ExternalMetrics(), succesFakeHandler{})
+	c := NewController(i.Azure().V1alpha1().ExternalMetrics(), config.handler)
+
+	// override for testing
 	c.externalMetricSynced = config.syncedFunction
 
 	if config.enqueuer != nil {
+		// override for testings
 		c.enqueuer = config.enqueuer(c)
 	}
+
+	// override so the item gets added right away for testing with no delay
+	c.externalMetricqueue = workqueue.NewNamedRateLimitingQueue(NoDelyRateLimiter(), "nodelay")
 
 	return c, i
 }
 
-func newExternalMetric(name string) *api.ExternalMetric {
+func newExternalMetric() *api.ExternalMetric {
 	return &api.ExternalMetric{
 		TypeMeta: metav1.TypeMeta{APIVersion: api.SchemeGroupVersion.String()},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      "test",
 			Namespace: metav1.NamespaceDefault,
 		},
 		Spec: api.ExternalMetricSpec{
@@ -140,4 +177,14 @@ func (h succesFakeHandler) Process(key string) error {
 	return nil
 }
 
+type failedFakeHandler struct{}
+
+func (h failedFakeHandler) Process(key string) error {
+	return errors.New("this fake always fails")
+}
+
 var alwaysSynced = func() bool { return true }
+
+func NoDelyRateLimiter() workqueue.RateLimiter {
+	return workqueue.NewItemExponentialFailureRateLimiter(0, 0)
+}
