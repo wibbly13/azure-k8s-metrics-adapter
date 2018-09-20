@@ -34,11 +34,6 @@ type wanted struct {
 	enqueCount int
 }
 
-type testConfig struct {
-	controllerConfig controllerConfig
-	want             wanted
-}
-
 func testStore() []runtime.Object {
 	var storeObjects []runtime.Object
 
@@ -48,72 +43,60 @@ func testStore() []runtime.Object {
 }
 
 func TestProcessRunsToCompletion(t *testing.T) {
-
-	testConfig := testConfig{
-		controllerConfig: controllerConfig{
-			store:          testStore(),
-			syncedFunction: alwaysSynced,
-			handler:        succesFakeHandler{},
+	tests := []struct {
+		name             string
+		controllerConfig controllerConfig
+		want             wanted
+	}{
+		{
+			name: "test run to completion",
+			controllerConfig: controllerConfig{
+				store:          testStore(),
+				syncedFunction: alwaysSynced,
+				handler:        succesFakeHandler{},
+			},
+			want: wanted{
+				itemsRemaing: 0,
+				keepRunning:  true,
+			},
 		},
-		want: wanted{
-			itemsRemaing: 0,
-			keepRunning:  true,
+		{
+			name: "failed hanlder reqenques",
+			controllerConfig: controllerConfig{
+				store:          testStore(),
+				syncedFunction: alwaysSynced,
+				handler:        failedFakeHandler{},
+			},
+			want: wanted{
+				itemsRemaing: 1,
+				keepRunning:  true,
+				enqueCount:   2, // should be two because it got added two second time on failure
+			},
+		},
+		{
+			name: "invalid item on queue",
+			controllerConfig: controllerConfig{
+				store:          testStore(),
+				syncedFunction: alwaysSynced,
+				enqueuer:       badenquer,
+				handler:        succesFakeHandler{},
+			},
+			want: wanted{
+				itemsRemaing: 0,
+				keepRunning:  true,
+			},
 		},
 	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 
-	runControllerTests(testConfig, t)
+			runControllerTests(tt.controllerConfig, tt.want, t)
+		})
+	}
 }
 
-func TestFailedProcessorReEnqueues(t *testing.T) {
-
-	testConfig := testConfig{
-		controllerConfig: controllerConfig{
-			store:          testStore(),
-			syncedFunction: alwaysSynced,
-			handler:        failedFakeHandler{},
-		},
-		want: wanted{
-			itemsRemaing: 1,
-			keepRunning:  true,
-			enqueCount:   2, // should be two because it got added two second time on failure
-		},
-	}
-
-	runControllerTests(testConfig, t)
-}
-
-func TestInvalidItemOnQueue(t *testing.T) {
-	// force the queue to have anything other than a string
-	// to exersize the invalid queue path
-	var badenquer = func(c *Controller) func(obj interface{}) {
-		enquer := func(obj interface{}) {
-			var key string
-
-			glog.V(2).Infof("adding item to queue for '%s'", key)
-			c.externalMetricqueue.AddRateLimited(obj)
-		}
-
-		return enquer
-	}
-
-	testConfig := testConfig{
-		controllerConfig: controllerConfig{
-			store:          testStore(),
-			syncedFunction: alwaysSynced,
-			enqueuer:       badenquer,
-			handler:        succesFakeHandler{},
-		},
-		want: wanted{
-			itemsRemaing: 0,
-			keepRunning:  true,
-		},
-	}
-
-	runControllerTests(testConfig, t)
-}
-
-func runControllerTests(testConfig testConfig, t *testing.T) {
-	c, i := newController(testConfig.controllerConfig)
+func runControllerTests(controllerConfig controllerConfig, want wanted, t *testing.T) {
+	c, i := newController(controllerConfig)
 
 	stopCh := make(chan struct{})
 	defer close(stopCh)
@@ -121,19 +104,19 @@ func runControllerTests(testConfig testConfig, t *testing.T) {
 
 	keepRunning := c.processNextItem()
 
-	if keepRunning != testConfig.want.keepRunning {
-		t.Errorf("should continue processing = %v, want %v", keepRunning, testConfig.want.keepRunning)
+	if keepRunning != want.keepRunning {
+		t.Errorf("should continue processing = %v, want %v", keepRunning, want.keepRunning)
 	}
 
 	items := c.externalMetricqueue.Len()
 
-	if items != testConfig.want.itemsRemaing {
-		t.Errorf("Items still on queue = %v, want %v", items, testConfig.want.itemsRemaing)
+	if items != want.itemsRemaing {
+		t.Errorf("Items still on queue = %v, want %v", items, want.itemsRemaing)
 	}
 
 	retrys := c.externalMetricqueue.NumRequeues("default/test")
-	if retrys != testConfig.want.enqueCount {
-		t.Errorf("Items enqueued times = %v, want %v", retrys, testConfig.want.enqueCount)
+	if retrys != want.enqueCount {
+		t.Errorf("Items enqueued times = %v, want %v", retrys, want.enqueCount)
 	}
 }
 
@@ -155,6 +138,17 @@ func newController(config controllerConfig) (*Controller, informers.SharedInform
 	c.externalMetricqueue = workqueue.NewNamedRateLimitingQueue(NoDelyRateLimiter(), "nodelay")
 
 	return c, i
+}
+
+var badenquer = func(c *Controller) func(obj interface{}) {
+	enquer := func(obj interface{}) {
+		var key string
+
+		glog.V(2).Infof("adding item to queue for '%s'", key)
+		c.externalMetricqueue.AddRateLimited(obj)
+	}
+
+	return enquer
 }
 
 func newExternalMetric() *api.ExternalMetric {
