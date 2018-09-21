@@ -69,18 +69,19 @@ func TestShouldFailOnInvalidCacheKey(t *testing.T) {
 	}
 }
 
-func TestWhenItemHasAlreadyBeenDeleted(t *testing.T) {
+func TestWhenItemHasBeenDeleted(t *testing.T) {
 	var storeObjects []runtime.Object
 	var externalMetricsListerCache []*api.ExternalMetric
 
 	externalMetric := newFullExternalMetric("test")
 
-	// do not put lister cache.  T
-	// this will simulate the scenario where the item was deleted before processing was kicked off
-	storeObjects = append(storeObjects, externalMetric)
+	// don't put anything in the stores
 	handler, metriccache := newHandler(storeObjects, externalMetricsListerCache)
 
+	// add the item to the cache then test if it gets deleted
 	key := getKey(externalMetric)
+	metriccache.UpdateMetric(key, azmetricrequest.AzureMetricRequest{})
+
 	err := handler.Process(key)
 
 	if err != nil {
