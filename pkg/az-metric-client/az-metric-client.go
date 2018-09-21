@@ -3,11 +3,9 @@ package azureMetricClient
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/Azure/azure-k8s-metrics-adapter/pkg/aiapiclient"
-	"github.com/Azure/azure-k8s-metrics-adapter/pkg/aim"
 	"github.com/Azure/azure-k8s-metrics-adapter/pkg/azmetricrequest"
 	"github.com/Azure/azure-k8s-metrics-adapter/pkg/metriccache"
 
@@ -19,28 +17,23 @@ import (
 	"k8s.io/metrics/pkg/apis/external_metrics"
 
 	"github.com/Azure/azure-sdk-for-go/services/preview/monitor/mgmt/2018-03-01/insights"
-	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
+
+type MonitorClient interface {
+	List(ctx context.Context, resourceURI string, timespan string, interval *string, metricnames string, aggregation string, top *int32, orderby string, filter string, resultType insights.ResultType, metricnamespace string) (result insights.Response, err error)
+}
 
 // AzureMetricClient is used to make requests to Azure Monitor
 type AzureMetricClient struct {
-	monitorClient         insights.MetricsClient
+	monitorClient         MonitorClient
 	appinsightsclient     aiapiclient.AiAPIClient
 	defaultSubscriptionID string
 	metriccache           *metriccache.MetricCache
 }
 
 // NewAzureMetricClient creates a client for making requests to Azure Monitor
-func NewAzureMetricClient(metricCache *metriccache.MetricCache) AzureMetricClient {
-	defaultSubscriptionID := getDefaultSubscriptionID()
-
-	// looks for ENV variables then falls back to AIM issue #10
-	monitorClient := insights.NewMetricsClient(defaultSubscriptionID)
+func NewAzureMetricClient(defaultSubscriptionID string, metricCache *metriccache.MetricCache, monitorClient MonitorClient) AzureMetricClient {
 	appInsightsClient := aiapiclient.NewAiAPIClient()
-	authorizer, err := auth.NewAuthorizerFromEnvironment()
-	if err == nil {
-		monitorClient.Authorizer = authorizer
-	}
 
 	return AzureMetricClient{
 		monitorClient:         monitorClient,
@@ -58,11 +51,14 @@ func (c AzureMetricClient) GetAzureMetric(namespace string, metricName string, m
 		return external_metrics.ExternalMetricValue{}, err
 	}
 
+	err = azMetricRequest.Validate()
+	if err != nil {
+		return external_metrics.ExternalMetricValue{}, err
+	}
+
 	metricResourceURI := azMetricRequest.MetricResourceURI()
 	glog.V(2).Infof("resource uri: %s", metricResourceURI)
 
-	// make call to azure resource provider with subscription id provided issue #9
-	c.monitorClient.SubscriptionID = azMetricRequest.SubscriptionID
 	metricResult, err := c.monitorClient.List(context.Background(), metricResourceURI,
 		azMetricRequest.Timespan, nil,
 		azMetricRequest.MetricName, azMetricRequest.Aggregation, nil,
@@ -73,11 +69,11 @@ func (c AzureMetricClient) GetAzureMetric(namespace string, metricName string, m
 
 	total := extractValue(metricResult)
 
-	glog.V(2).Infof("found metric value: %s", total)
+	glog.V(2).Infof("found metric value: %f", total)
 
 	// TODO set Value based on aggregations type
 	return external_metrics.ExternalMetricValue{
-		MetricName: azMetricRequest.ResourceName,
+		MetricName: azMetricRequest.MetricName,
 		Value:      *resource.NewQuantity(int64(total), resource.DecimalSI),
 		Timestamp:  metav1.Now(),
 	}, nil
@@ -88,6 +84,10 @@ func (c AzureMetricClient) getMetricRequest(namespace string, metricName string,
 
 	azMetricRequest, found := c.metriccache.GetMetric(key)
 	if found {
+		azMetricRequest.Timespan = azmetricrequest.TimeSpan()
+		if azMetricRequest.SubscriptionID == "" {
+			azMetricRequest.SubscriptionID = c.defaultSubscriptionID
+		}
 		return azMetricRequest, nil
 	}
 
@@ -95,6 +95,7 @@ func (c AzureMetricClient) getMetricRequest(namespace string, metricName string,
 	if err != nil {
 		return azmetricrequest.AzureMetricRequest{}, err
 	}
+
 	return azMetricRequest, nil
 }
 
@@ -127,7 +128,7 @@ func (c AzureMetricClient) GetCustomMetric(groupResource schema.GroupResource, n
 	value := metric[metricRequestInfo.Aggregation]
 	normalizedValue := normalizeValue(value)
 
-	glog.V(2).Infof("found metric value: %d", normalizedValue)
+	glog.V(2).Infof("found metric value: %f", normalizedValue)
 	return normalizedValue, nil
 }
 
@@ -156,26 +157,6 @@ func extractValue(metricResult insights.Response) float64 {
 	total := *data[len(data)-1].Total
 
 	return total
-}
-
-func getDefaultSubscriptionID() string {
-	// if the user explicitly sets we should use that
-	subscriptionID := os.Getenv("SUBSCRIPTION_ID")
-	if subscriptionID == "" {
-		//fallback to trying azure instance meta data
-		azureConfig, err := aim.GetAzureConfig()
-		if err != nil {
-			glog.Errorf("Unable to get azure config from MSI: %v", err)
-		}
-
-		subscriptionID = azureConfig.SubscriptionID
-	}
-
-	if subscriptionID == "" {
-		glog.V(0).Info("Default Azure Subscription is not set.  You must provide subscription id via HPA lables, set an environment variable, or enable MSI.  See docs for more details")
-	}
-
-	return subscriptionID
 }
 
 func metricKey(namespace string, name string) string {
