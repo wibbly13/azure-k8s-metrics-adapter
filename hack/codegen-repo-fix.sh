@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# this is a hack for fixing casing why PR (TODO) get merged upstream.
+# this is a hack for fixing casing why PR (https://github.com/kubernetes/kubernetes/pull/68484) get merged upstream.
 # currently the code-generator does not support package names 
 # with capitals (https://github.com/kubernetes/code-generator/issues/20#issuecomment-389311739)
 # I made a fix on my own fork so this swaps out that code until I get the PR

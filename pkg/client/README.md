@@ -1,0 +1,1 @@
+All of the code in the folder is auto-generated.  To make modifications, update the files under the folder `../apis` and run `make gen-apis` followed by `make verify-apis`.
