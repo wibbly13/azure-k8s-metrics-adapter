@@ -1,4 +1,12 @@
 ---
+# Source: azure-k8s-metrics-adapter/templates/00-namespace.yaml
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: "staging-user-management"
+
+---
 # Source: azure-k8s-metrics-adapter/templates/serviceAccount.yaml
 
 apiVersion: v1
@@ -271,4 +279,3 @@ spec:
 
 ---
 # Source: azure-k8s-metrics-adapter/templates/secret.yaml
-
