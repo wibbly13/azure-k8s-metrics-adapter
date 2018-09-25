@@ -128,7 +128,7 @@ func TestIfCacheHasItReturn(t *testing.T) {
 	metricCache := metriccache.NewMetricCache()
 
 	metricRequest := newMetricRequest()
-	metricCache.UpdateMetric("default/name", metricRequest)
+	metricCache.Update("default/name", metricRequest)
 	client := NewAzureMetricClient("", metricCache, monitorClient)
 
 	metricValue, err := client.GetAzureMetric("default", "name", nil)

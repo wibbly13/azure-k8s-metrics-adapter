@@ -65,7 +65,7 @@ func (h *Handler) Process(namespaceNameKey string) error {
 	}
 
 	glog.V(2).Infof("adding to cache item '%s' in namespace '%s'", name, ns)
-	h.metriccache.UpdateMetric(namespaceNameKey, azureMetricRequest)
+	h.metriccache.Update(namespaceNameKey, azureMetricRequest)
 
 	return nil
 }

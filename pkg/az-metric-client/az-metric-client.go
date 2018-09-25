@@ -82,7 +82,7 @@ func (c *AzureMetricClient) GetAzureMetric(namespace string, metricName string, 
 func (c AzureMetricClient) getMetricRequest(namespace string, metricName string, metricSelector labels.Selector) (azmetricrequest.AzureMetricRequest, error) {
 	key := metricKey(namespace, metricName)
 
-	azMetricRequest, found := c.metriccache.GetMetric(key)
+	azMetricRequest, found := c.metriccache.Get(key)
 	if found {
 		azMetricRequest.Timespan = azmetricrequest.TimeSpan()
 		if azMetricRequest.SubscriptionID == "" {
