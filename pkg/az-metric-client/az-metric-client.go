@@ -44,7 +44,7 @@ func NewAzureMetricClient(defaultSubscriptionID string, metricCache *metriccache
 }
 
 // GetAzureMetric calls Azure Monitor endpoint and returns a metric based on label selectors
-func (c AzureMetricClient) GetAzureMetric(namespace string, metricName string, metricSelector labels.Selector) (external_metrics.ExternalMetricValue, error) {
+func (c *AzureMetricClient) GetAzureMetric(namespace string, metricName string, metricSelector labels.Selector) (external_metrics.ExternalMetricValue, error) {
 
 	azMetricRequest, err := c.getMetricRequest(namespace, metricName, metricSelector)
 	if err != nil {
