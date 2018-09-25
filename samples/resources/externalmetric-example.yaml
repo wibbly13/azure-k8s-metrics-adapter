@@ -5,7 +5,7 @@ metadata:
 spec:
   azure:
     resourceGroup: sb-external-example
-    resourceName: sb-external-ns-j
+    resourceName: sb-external-ns
     resourceProviderNamespace: Microsoft.ServiceBus
     resourceType: namespaces
   metric:
