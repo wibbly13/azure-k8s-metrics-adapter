@@ -13,3 +13,5 @@ hack
 charts
 .circleci
 .git
+local-dev-values.yaml
+local-dev-values.yaml.example

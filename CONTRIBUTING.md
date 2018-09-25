@@ -76,6 +76,10 @@ To create a fast dev cycle you can use skaffold with a local cluster (minikube o
 - Download [skaffold](https://github.com/GoogleContainerTools/skaffold#installation) 
 - Have your K8s context set to the local cluster you want to deploy to: `kubectl config use-context`
 - If using minikube run `eval $(minikube docker-env)`
+- Create a Service Principle for local development: `az ad sp create-for-rbac -n "adapter-sp" --role "Monitoring Reader" --scopes /subscriptions/{SubID}/resourceGroups/{ResourceGroup1}` where the resource group contains resources (queue or app insights) you want to retrieve metrics for
+- Make a copy of `local-dev-values.yaml.example` and call it `local-dev-values.yaml` (`cp local-dev-values.yaml.example local-dev-values.yaml`) and replace the values with your Service Principle and subscription id.  
+
+Then run: 
 
 ```bash
 make dev

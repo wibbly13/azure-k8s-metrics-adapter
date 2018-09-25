@@ -15,3 +15,5 @@ deploy:
       overrides:
         image:
           pullPolicy: IfNotPresent
+      valuesFiles:
+        - local-dev-values.yaml
