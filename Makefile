@@ -30,7 +30,7 @@ vendor:
 	dep ensure -v
 
 test: vendor
-	CGO_ENABLED=0 go test ./pkg/...
+	hack/run-tests.sh
 
 version: build	
 ifeq ("$(SEMVER)", "")
